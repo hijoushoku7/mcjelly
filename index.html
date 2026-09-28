@@ -84,10 +84,12 @@
   #err { color: #c0392b; font-size: 12px; margin: 6px 0 0; min-height: 0; }
   #nogl { display: none; position: fixed; inset: 0; place-items: center; text-align: center; padding: 24px; }
 
+  #lang { position: fixed; left: 24px; bottom: 20px; box-shadow: var(--shadow); }
   #bar, #optsClose { display: none; }
 
   @media (max-width: 720px) {
-    header { left: 16px; top: 14px; right: 16px; }
+    header { left: 16px; top: 14px; right: 170px; }
+    #lang { left: auto; bottom: auto; right: 16px; top: 14px; }
     header h1 { font-size: 22px; }
     header p { display: none; }
     #panel:not(:modal) { display: none; }
@@ -166,13 +168,13 @@
     <dt data-ja="運動エネルギー">Kinetic energy</dt><dd id="sKe">–</dd>
     <dt data-ja="ピース数">Pieces</dt><dd id="sPieces">–</dd>
   </dl>
-  <h2 data-ja="言語">Language</h2>
-  <div class="seg" id="lang">
-    <button data-lang="en" aria-pressed="true">English</button>
-    <button data-lang="ja" aria-pressed="false">日本語</button>
-  </div>
   <button id="optsClose" class="btn" data-ja="閉じる">Close</button>
 </dialog>
+
+<div class="seg" id="lang" role="group" aria-label="Language">
+  <button data-lang="en" aria-pressed="true">English</button>
+  <button data-lang="ja" aria-pressed="false">日本語</button>
+</div>
 
 <nav id="bar">
   <div class="seg">
