@@ -60,9 +60,9 @@
   .row button, .btn { flex: 1; background: var(--line); }
   .row button:hover, .btn:hover { background: var(--accent-soft); }
   .btn.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
-  #pause { background: var(--stop); color: #fff; font-weight: 600; }
-  #pause[aria-pressed="true"] { background: var(--go); }
-  #pause:hover { filter: brightness(1.1); }
+  #pause, #pauseTop { background: var(--stop); color: #fff; font-weight: 600; }
+  #pause[aria-pressed="true"], #pauseTop[aria-pressed="true"] { background: var(--go); }
+  #pause:hover, #pauseTop:hover { filter: brightness(1.1); }
   .btn.primary:hover { background: var(--accent); filter: brightness(1.08); }
   label.slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin: 8px 0; }
   label.slider output { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
@@ -97,7 +97,7 @@
   @media (prefers-reduced-motion: reduce) { #tip { animation: none; } }
 
   #lang { position: fixed; left: 24px; bottom: 20px; box-shadow: var(--shadow); }
-  #bar, #optsClose, #top > form, #resetTop { display: none; }
+  #bar, #optsClose, #top > form, #resetTop, #pauseTop { display: none; }
   #top { display: contents; } /* desktop: only #lang shows, fixed bottom-left */
 
   @media (max-width: 720px) {
@@ -105,7 +105,7 @@
     #lang { position: static; flex: none; }
     #top { display: flex; gap: 8px; position: fixed; left: 16px; right: 16px; top: calc(12px + env(safe-area-inset-top)); }
     #top > form { display: flex; flex: 1; min-width: 0; }
-    #resetTop { display: block; font-size: 18px; }
+    #resetTop, #pauseTop { display: block; font-size: 18px; }
     #top input { background: var(--card); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
     .byName input { font-size: 16px; } /* iOS Safari zooms into inputs under 16px on focus */
     #top button { flex: none; box-shadow: var(--shadow); }
@@ -197,6 +197,7 @@
 
 
 <div id="top">
+  <button id="pauseTop" aria-pressed="false"></button>
   <form class="byName">
     <input placeholder="Player name" aria-label="Player name" required pattern="[A-Za-z0-9_]{1,16}" autocomplete="off" spellcheck="false">
     <button class="btn" data-ja="取得">Fetch</button>
@@ -707,11 +708,17 @@ function setLang(l) {
   $('panel').ariaLabel = L('Options', 'オプション');
   $('resetTop').ariaLabel = $('resetTop').title = L('Rebuild', 'つくりなおす');
   $('toolHint').textContent = L(...hints[tool]);
+  syncPause();
+}
+function syncPause() {
+  for (const id of ['pause', 'pauseTop']) $(id).setAttribute('aria-pressed', paused);
   $('pause').textContent = paused ? L('Play', '再生') : L('Pause', '一時停止');
+  $('pauseTop').textContent = paused ? '▶\uFE0E' : '⏸\uFE0E';
+  $('pauseTop').ariaLabel = $('pauseTop').title = $('pause').textContent;
 }
 let savedLang; try { savedLang = localStorage.getItem('lang'); } catch {}
 setLang(savedLang === 'ja' ? 'ja' : 'en');
-$('pause').addEventListener('click', (e) => { paused = !paused; e.target.setAttribute('aria-pressed', paused); e.target.textContent = paused ? L('Play', '再生') : L('Pause', '一時停止'); });
+for (const id of ['pause', 'pauseTop']) $(id).addEventListener('click', () => { paused = !paused; syncPause(); });
 $('mesh').addEventListener('click', (e) => { showMesh = !showMesh; e.target.setAttribute('aria-pressed', showMesh); e.target.style.fontWeight = showMesh ? 600 : ''; });
 for (const id of ['reset', 'resetTop']) $(id).addEventListener('click', () => { sim.reset(); knifeTrail = []; });
 firm.addEventListener('input', () => { sim.firmness = +firm.value; $('firmOut').textContent = (+firm.value).toFixed(2); });
