@@ -58,7 +58,6 @@ export class Jelly {
     this.damping = 0.45;
     this.gravity = 250;
     this.substeps = 10;
-    this.memory = 1.5; // 1/s
     this.grab = null;
     this.grabCompliance = 4e-6; // larger = the held spot lags and stretches more
     this.cuts = [];
@@ -114,11 +113,9 @@ export class Jelly {
       slotVert[s] = v;
     }
     const x = new Float32Array(n * 3), v = new Float32Array(n * 3), rest = new Float32Array(n * 3), lat = new Int32Array(n), count = new Float32Array(n);
-    const stuck = new Uint8Array(n); // soles still in their moulded spot (not glued, just marks the piece for mould memory)
     for (let s = 0; s < nC * 8; s++) {
       const i = slotVert[s], L = slotLat[s];
       lat[i] = L; count[i]++;
-      stuck[i] = old ? old.stuck[old.slotVert[s]] : latPos[L * 3 + 1] === 0;
       for (let a = 0; a < 3; a++) {
         rest[i * 3 + a] = latPos[L * 3 + a];
         x[i * 3 + a] = old ? old.x[old.slotVert[s] * 3 + a] : latPos[L * 3 + a];
@@ -153,7 +150,7 @@ export class Jelly {
     const edgeRest = new Float32Array(edges.length / 2);
     for (let e = 0; e < edgeRest.length; e++) edgeRest[e] = dist(rest, edges[e * 2], edges[e * 2 + 1]);
 
-    Object.assign(this, { n, x, v, rest, stuck, w, w0: w.slice(), lat, slotVert, piece, nPieces: pieceOfRoot.size, tets, tetRest, edges, edgeRest });
+    Object.assign(this, { n, x, v, rest, w, w0: w.slice(), lat, slotVert, piece, nPieces: pieceOfRoot.size, tets, tetRest, edges, edgeRest });
     this.restVolume = tetRest.reduce((s, V) => s + Math.abs(V), 0);
     this.buildSurface();
     this.prev = new Float32Array(n * 3);
@@ -198,7 +195,7 @@ export class Jelly {
     }
     if (!any || !pos || !neg) return false;
     this.cuts.push(side);
-    this.rebuild({ x: this.x, v: this.v, stuck: this.stuck, slotVert: this.slotVert });
+    this.rebuild({ x: this.x, v: this.v, slotVert: this.slotVert });
     // nudge the two faces of the cut apart
     for (let c = 0; c < nC; c++) if (side[c]) for (let k = 0; k < 8; k++) {
       const i = this.slotVert[c * 8 + k] * 3;
@@ -278,21 +275,6 @@ export class Jelly {
         x[i * 3] = prev[i * 3] + (x[i * 3] - prev[i * 3]) * 0.3;
         x[i * 3 + 2] = prev[i * 3 + 2] + (x[i * 3 + 2] - prev[i * 3 + 2]) * 0.3;
       }
-    }
-    const { stuck, rest, piece } = this;
-    // mould memory: the piece still set on the plate leans back toward its moulded pose.
-    // ponytail: a fake restoring force — a tall jelly on thin legs is an inverted pendulum and falls over otherwise
-    const anchored = new Uint8Array(this.nPieces);
-    for (let i = 0; i < n; i++) if (stuck[i]) anchored[piece[i]] = 1;
-    const mem = this.memory * h;
-    for (let i = 0; i < n; i++) {
-      if (!anchored[piece[i]] || w[i] === 0) continue;
-      for (let a = 0; a < 3; a++) x[i * 3 + a] += (rest[i * 3 + a] - x[i * 3 + a]) * mem;
-    }
-    for (let i = 0; i < n; i++) {
-      if (!stuck[i]) continue;
-      const dx = rest[i * 3] - x[i * 3], dy = rest[i * 3 + 1] - x[i * 3 + 1], dz = rest[i * 3 + 2] - x[i * 3 + 2];
-      if (dx * dx + dy * dy + dz * dz > 4) stuck[i] = 0; // lifted/slid away: piece leaves the mould pose
     }
     for (let i = 0; i < n * 3; i++) v[i] = (x[i] - prev[i]) / h;
     this.dampen(h);
