@@ -72,10 +72,11 @@
     repeating-conic-gradient(#0001 0 25%, transparent 0 50%) 0 0 / 8px 8px; }
   .skin { display: flex; gap: 10px; align-items: center; }
   .skin .btn { display: block; text-align: center; }
-  #byName { display: flex; gap: 6px; margin-top: 8px; }
-  #byName input { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: transparent;
+  .byName { display: flex; gap: 6px; }
+  #byName { margin-top: 8px; }
+  .byName input { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: transparent;
     border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; }
-  #byName button:disabled { cursor: progress; opacity: .6; }
+  .byName button:disabled { cursor: progress; opacity: .6; }
   .skin:has(+ #byName[aria-busy="true"]) #skinPreview { animation: pulse 1s ease-in-out infinite alternate; }
   @keyframes pulse { to { opacity: .3; } }
   #drop { position: fixed; inset: 0; display: none; place-items: center; background: var(--accent-soft);
@@ -85,13 +86,17 @@
   #nogl { display: none; position: fixed; inset: 0; place-items: center; text-align: center; padding: 24px; }
 
   #lang { position: fixed; left: 24px; bottom: 20px; box-shadow: var(--shadow); }
-  #bar, #optsClose { display: none; }
+  #bar, #optsClose, #top > form, #resetTop { display: none; }
+  #top { display: contents; } /* desktop: only #lang shows, fixed bottom-left */
 
   @media (max-width: 720px) {
-    header { left: 16px; top: 14px; right: 170px; }
-    #lang { left: auto; bottom: auto; right: 16px; top: 14px; }
-    header h1 { font-size: 22px; }
-    header p { display: none; }
+    header { display: none; }
+    #lang { position: static; flex: none; }
+    #top { display: flex; gap: 8px; position: fixed; left: 16px; right: 16px; top: calc(12px + env(safe-area-inset-top)); }
+    #top > form { display: flex; flex: 1; min-width: 0; }
+    #resetTop { display: block; font-size: 18px; }
+    #top input { background: var(--card); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+    #top button { flex: none; box-shadow: var(--shadow); }
     #panel:not(:modal) { display: none; }
     #panel:modal { inset: auto 0 0 0; width: auto; max-width: none; max-height: 85dvh; border-radius: 16px 16px 0 0;
       padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
@@ -154,7 +159,7 @@
       <p class="hint" style="margin-top:6px" data-ja="64×64・64×32のスキンをドロップしてもOK">Or drop a 64×64 / 64×32 skin</p>
     </div>
   </div>
-  <form id="byName">
+  <form id="byName" class="byName">
     <input id="mcName" placeholder="Player name" aria-label="Player name" required pattern="[A-Za-z0-9_]{1,16}" autocomplete="off" spellcheck="false">
     <button class="btn" data-ja="取得">Fetch</button>
   </form>
@@ -171,11 +176,18 @@
   <button id="optsClose" class="btn" data-ja="閉じる">Close</button>
 </dialog>
 
-<div class="seg" id="lang" role="group" aria-label="Language">
-  <button data-lang="en" aria-pressed="true">English</button>
-  <button data-lang="ja" aria-pressed="false">日本語</button>
-</div>
 
+<div id="top">
+  <form class="byName">
+    <input placeholder="Player name" aria-label="Player name" required pattern="[A-Za-z0-9_]{1,16}" autocomplete="off" spellcheck="false">
+    <button class="btn" data-ja="取得">Fetch</button>
+  </form>
+  <button id="resetTop" class="btn primary" aria-label="Rebuild" title="Rebuild">↻</button>
+  <div class="seg" id="lang" role="group" aria-label="Language">
+    <button data-lang="en" aria-pressed="true">English</button>
+    <button data-lang="ja" aria-pressed="false">日本語</button>
+  </div>
+</div>
 <nav id="bar">
   <div class="seg">
     <button data-tool="hand" aria-pressed="true" data-ja="✋ 手">✋ Hand</button>
@@ -641,8 +653,9 @@ function setLang(l) {
   document.documentElement.lang = l;
   for (const el of document.querySelectorAll('[data-ja]')) { el.dataset.en ??= el.textContent; el.textContent = el.dataset[l]; }
   for (const x of $('lang').children) x.setAttribute('aria-pressed', x.dataset.lang === l);
-  $('mcName').placeholder = L('Player name', 'プレイヤー名'); $('mcName').ariaLabel = $('mcName').placeholder;
+  for (const i of document.querySelectorAll('.byName input')) i.placeholder = i.ariaLabel = L('Player name', 'プレイヤー名');
   $('panel').ariaLabel = L('Options', 'オプション');
+  $('resetTop').ariaLabel = $('resetTop').title = L('Rebuild', 'つくりなおす');
   $('toolHint').textContent = L(...hints[tool]);
   $('pause').textContent = paused ? L('Play', '再生') : L('Pause', '一時停止');
 }
@@ -650,14 +663,15 @@ let savedLang; try { savedLang = localStorage.getItem('lang'); } catch {}
 setLang(savedLang === 'ja' ? 'ja' : 'en');
 $('pause').addEventListener('click', (e) => { paused = !paused; e.target.setAttribute('aria-pressed', paused); e.target.textContent = paused ? L('Play', '再生') : L('Pause', '一時停止'); });
 $('mesh').addEventListener('click', (e) => { showMesh = !showMesh; e.target.setAttribute('aria-pressed', showMesh); e.target.style.fontWeight = showMesh ? 600 : ''; });
-$('reset').addEventListener('click', () => { sim.reset(); knifeTrail = []; });
+for (const id of ['reset', 'resetTop']) $(id).addEventListener('click', () => { sim.reset(); knifeTrail = []; });
 firm.addEventListener('input', () => { sim.firmness = +firm.value; $('firmOut').textContent = (+firm.value).toFixed(2); });
 damp.addEventListener('input', () => { sim.damping = +damp.value; $('dampOut').textContent = (+damp.value).toFixed(2); });
 $('file').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) loadSkinFromBlob(f); e.target.value = ''; });
 // no server: these services proxy Mojang's skin by name, with CORS. Unknown names come back as the default skin.
-$('byName').addEventListener('submit', async (e) => {
+for (const i of document.querySelectorAll('.byName input')) i.addEventListener('input', () => i.setCustomValidity(''));
+for (const f of document.querySelectorAll('.byName')) f.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const form = e.currentTarget, btn = form.querySelector('button'), name = $('mcName').value.trim();
+  const form = e.currentTarget, btn = form.querySelector('button'), input = form.querySelector('input'), name = input.value.trim();
   errEl.textContent = '';
   form.setAttribute('aria-busy', 'true'); btn.disabled = true; btn.textContent = L('Fetching…', '取得中…');
   try {
@@ -665,6 +679,7 @@ $('byName').addEventListener('submit', async (e) => {
       try { const r = await fetch(base + name); if (r.ok) return loadSkinFromBlob(await r.blob()); } catch {}
     }
     errEl.textContent = L(`Couldn't fetch the skin for "${name}"`, `「${name}」のスキンを取得できませんでした`);
+    input.setCustomValidity(errEl.textContent); input.reportValidity(); // the sheet with #err is closed on phones
   } finally {
     form.removeAttribute('aria-busy'); btn.disabled = false; btn.textContent = L('Fetch', '取得');
   }
