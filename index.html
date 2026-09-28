@@ -26,7 +26,9 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
-    font: 14px/1.5 "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif; overflow: hidden; }
+    font: 14px/1.5 "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif; overflow: hidden;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  input { -webkit-user-select: text; user-select: text; }
   #stage { position: fixed; inset: 0; }
   #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
   #overlay { pointer-events: none; }
@@ -84,6 +86,15 @@
   body.dragging #drop { display: grid; }
   #err { color: #c0392b; font-size: 12px; margin: 6px 0 0; min-height: 0; }
   #nogl { display: none; position: fixed; inset: 0; place-items: center; text-align: center; padding: 24px; }
+
+  #tip { position: fixed; max-width: 240px; padding: 10px 14px; border-radius: 12px; background: var(--accent); color: var(--accent-ink);
+    font-weight: 600; box-shadow: var(--shadow); cursor: pointer; animation: tipIn .3s ease-out, bob 1.2s ease-in-out .3s infinite alternate; }
+  #tip::after { content: ''; position: absolute; left: var(--ax); width: 12px; height: 12px; background: inherit; transform: translateX(-50%) rotate(45deg); }
+  #tip.below::after { top: -6px; }
+  #tip:not(.below)::after { bottom: -6px; }
+  @keyframes tipIn { from { opacity: 0; } }
+  @keyframes bob { to { transform: translateY(-4px); } }
+  @media (prefers-reduced-motion: reduce) { #tip { animation: none; } }
 
   #lang { position: fixed; left: 24px; bottom: 20px; box-shadow: var(--shadow); }
   #bar, #optsClose, #top > form, #resetTop { display: none; }
@@ -143,6 +154,11 @@
     <button data-speed="0.5" aria-pressed="false">½×</button>
     <button data-speed="0.25" aria-pressed="false">¼×</button>
   </div>
+  <div class="seg" id="fps" style="margin-top:6px">
+    <button data-fps="0" aria-pressed="true" data-ja="自動">Auto</button>
+    <button data-fps="60" aria-pressed="false">60 fps</button>
+    <button data-fps="30" aria-pressed="false">30 fps</button>
+  </div>
   <div class="row" style="margin-top:6px">
     <button id="pause" aria-pressed="false"></button>
     <button id="mesh" aria-pressed="false" data-ja="メッシュ">Mesh</button>
@@ -196,6 +212,7 @@
   </div>
   <button id="optsBtn" class="btn" data-ja="⚙ 設定">⚙ Settings</button>
 </nav>
+<div id="tip" role="status" hidden><span data-ja="ナイフ！">Knife!</span></div>
 
 <div id="drop" data-ja="スキンPNGをここにドロップ">Drop a skin PNG here</div>
 <div id="nogl" data-ja="このページには WebGL2 が必要です。">This page needs WebGL2.</div>
@@ -630,7 +647,28 @@ for (const b of toolBtns) b.addEventListener('click', () => {
   for (const x of toolBtns) x.setAttribute('aria-pressed', x.dataset.tool === tool);
   document.body.className = tool;
   $('toolHint').textContent = L(...hints[tool]);
+  if (tool === 'knife') tip.hidden = true;
 });
+// first visit: after 10s still on the hand, point a bubble at whichever knife button is on screen
+const tip = $('tip');
+function placeTip() {
+  const k = [...toolBtns].find((b) => b.dataset.tool === 'knife' && b.getClientRects().length);
+  if (!k) return;
+  const r = k.getBoundingClientRect(), below = r.top < innerHeight / 2, cx = r.left + r.width / 2;
+  const x = Math.min(Math.max(cx - tip.offsetWidth / 2, 16), innerWidth - 16 - tip.offsetWidth);
+  tip.classList.toggle('below', below);
+  tip.style.left = x + 'px';
+  tip.style.top = (below ? r.bottom + 12 : r.top - 12 - tip.offsetHeight) + 'px';
+  tip.style.setProperty('--ax', cx - x + 'px');
+}
+let tipSeen; try { tipSeen = localStorage.getItem('tipSeen'); } catch {}
+if (!tipSeen) setTimeout(() => {
+  if (tool !== 'hand') return;
+  tip.hidden = false; placeTip();
+  try { localStorage.setItem('tipSeen', 1); } catch {}
+}, 10000);
+tip.addEventListener('click', () => (tip.hidden = true));
+addEventListener('resize', () => { if (!tip.hidden) placeTip(); });
 // options panel: plain non-modal dialog on desktop, modal sheet on phones (CSS hides it when not :modal)
 const panel = $('panel');
 $('optsBtn').addEventListener('click', () => { panel.close(); panel.showModal(); });
@@ -646,6 +684,15 @@ $('speed').addEventListener('click', (e) => {
   speed = +b.dataset.speed;
   for (const x of $('speed').children) x.setAttribute('aria-pressed', x === b);
 });
+let fps = 0; // 0 = display refresh rate
+$('fps').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setFps(+b.dataset.fps); });
+function setFps(f) {
+  fps = f;
+  try { localStorage.setItem('fps', f); } catch {}
+  for (const x of $('fps').children) x.setAttribute('aria-pressed', +x.dataset.fps === f);
+}
+let savedFps; try { savedFps = +localStorage.getItem('fps'); } catch {}
+setFps([60, 30].includes(savedFps) ? savedFps : 0);
 // language: English by default; [data-ja] elements hold their Japanese text, the English is stashed on first switch
 $('lang').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setLang(b.dataset.lang); });
 function setLang(l) {
@@ -712,7 +759,9 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => (BG 
 
 let last = performance.now(), frame = 0;
 function draw(now) {
-  const dt = Math.min((now - last) / 1000, 1 / 60); // slow devices go slow-mo rather than piling up substeps last = now;
+  if (fps && now - last < 1000 / fps - 2) { requestAnimationFrame(draw); return; } // -2ms: rAF jitter
+  const dt = Math.min((now - last) / 1000, 1 / 30); // slow devices go slow-mo rather than piling up substeps
+  last = now;
   if (sim && !paused) sim.step(dt * speed);
   if (!sim) { requestAnimationFrame(draw); return; }
   if (meshVersion !== sim.surfaceVersion) rebuildMesh();
