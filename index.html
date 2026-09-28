@@ -441,7 +441,7 @@ glCanvas.addEventListener('pointerdown', (e) => {
       }
       if (!ids.length) ids.push(hit.v), offs.push(0, 0, 0);
       sim.grab = { ids: Int32Array.from(ids), offs: Float32Array.from(offs), target: hit.point.slice() };
-      drag = { mode: 'grab', plane: hit.point.slice(), n: BASIS.z, last: [sx, sy] };
+      drag = { mode: 'grab', plane: hit.point.slice(), n: BASIS.z };
       document.body.classList.add('grabbing');
       return;
     }
@@ -458,16 +458,6 @@ glCanvas.addEventListener('pointermove', (e) => {
   } else if (drag.mode === 'grab') {
     const d = rayAt(sx, sy), t = dot(sub(drag.plane, EYE), drag.n) / dot(d, drag.n);
     if (t > 0) sim.grab.target = [EYE[0] + d[0] * t, Math.max(0, EYE[1] + d[1] * t), EYE[2] + d[2] * t];
-    // trackball-style: spin the held spot's offsets around the axis perpendicular to the mouse motion
-    const mx = sx - drag.last[0], my = sy - drag.last[1], ang = Math.hypot(mx, my) * 0.01;
-    drag.last = [sx, sy];
-    if (ang > 0) {
-      const k = nrm([0, 1, 2].map((i) => BASIS.y[i] * mx + BASIS.x[i] * my)), c = Math.cos(ang), s = Math.sin(ang), o = sim.grab.offs;
-      for (let j = 0; j < o.length; j += 3) {
-        const v = [o[j], o[j + 1], o[j + 2]], kv = crs(k, v), kd = dot(k, v) * (1 - c);
-        for (let a = 0; a < 3; a++) o[j + a] = v[a] * c + kv[a] * s + k[a] * kd;
-      }
-    }
   } else if (drag.mode === 'knife') {
     drag.b = [sx, sy];
   }
@@ -481,7 +471,18 @@ function endDrag() {
 }
 glCanvas.addEventListener('pointerup', endDrag);
 glCanvas.addEventListener('pointercancel', endDrag);
-glCanvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.dist = Math.min(180, Math.max(30, cam.dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+glCanvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (drag && drag.mode === 'grab' && sim.grab) {
+    // spin the held spot's offsets around the view axis
+    const k = BASIS.z, ang = e.deltaY * 0.003, c = Math.cos(ang), s = Math.sin(ang), o = sim.grab.offs;
+    for (let j = 0; j < o.length; j += 3) {
+      const v = [o[j], o[j + 1], o[j + 2]], kv = crs(k, v), kd = dot(k, v) * (1 - c);
+      for (let a = 0; a < 3; a++) o[j + a] = v[a] * c + kv[a] * s + k[a] * kd;
+    }
+    return;
+  }
+  cam.dist = Math.min(180, Math.max(30, cam.dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
 
 function doCut(A, B) {
   const len = Math.hypot(B[0] - A[0], B[1] - A[1]);
