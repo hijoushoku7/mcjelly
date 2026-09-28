@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>スキンゼリー</title>
+<meta name="description" content="Minecraftスキンを、ぷるぷるのゼリーに。つまんで、引っぱって、ナイフで切れる物理シミュレーション。">
+<style>
+  :root {
+    --bg: #efe9df; --ink: #2b2620; --muted: #7d7366; --line: #d9cfbf;
+    --card: rgba(255, 252, 246, .82); --accent: #3f9b57; --accent-ink: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1c1a17; --ink: #efe8dc; --muted: #a39886; --line: #3a352e;
+      --card: rgba(38, 35, 31, .85); --accent: #5cc275; --accent-ink: #10200f;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif; overflow: hidden; }
+  #stage { position: fixed; inset: 0; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #overlay { pointer-events: none; }
+  body.knife #gl { cursor: crosshair; }
+  body.hand #gl { cursor: grab; }
+  body.grabbing #gl { cursor: grabbing; }
+
+  header { position: fixed; left: 24px; top: 20px; max-width: 360px; pointer-events: none; }
+  header .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  header h1 { font-size: 30px; margin: 4px 0 6px; letter-spacing: .02em; font-weight: 700; }
+  header p { margin: 0; color: var(--muted); }
+
+  #panel { position: fixed; right: 20px; top: 20px; width: 272px; max-height: calc(100% - 40px); overflow: auto;
+    background: var(--card); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  #panel h2 { font-size: 11px; letter-spacing: .12em; color: var(--muted); margin: 14px 0 8px; font-weight: 600; }
+  #panel h2:first-child { margin-top: 0; }
+  .seg { display: flex; gap: 4px; background: var(--line); padding: 3px; border-radius: 9px; }
+  .seg button { flex: 1; }
+  button { font: inherit; border: 0; border-radius: 7px; padding: 7px 10px; background: transparent; color: var(--ink); cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .seg button[aria-pressed="true"] { background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.12); font-weight: 600; }
+  .row { display: flex; gap: 6px; }
+  .row button, .btn { flex: 1; background: var(--line); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  label.slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin: 8px 0; }
+  label.slider output { font-variant-numeric: tabular-nums; color: var(--muted); }
+  label.slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+  dl { display: grid; grid-template-columns: 1fr auto; margin: 0; gap: 4px 8px; font-variant-numeric: tabular-nums; }
+  dt { color: var(--muted); } dd { margin: 0; text-align: right; }
+  .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+  #skinPreview { width: 64px; height: 64px; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 6px; background:
+    repeating-conic-gradient(#0001 0 25%, transparent 0 50%) 0 0 / 8px 8px; }
+  .skin { display: flex; gap: 10px; align-items: center; }
+  .skin .btn { display: block; text-align: center; }
+  #drop { position: fixed; inset: 0; display: none; place-items: center; background: rgba(63,155,87,.18);
+    border: 3px dashed var(--accent); font-size: 20px; font-weight: 700; pointer-events: none; }
+  body.dragging #drop { display: grid; }
+  #err { color: #c0392b; font-size: 12px; margin: 6px 0 0; min-height: 0; }
+  #nogl { display: none; position: fixed; inset: 0; place-items: center; text-align: center; padding: 24px; }
+
+  @media (max-width: 720px) {
+    header { left: 16px; top: 14px; right: 16px; }
+    header h1 { font-size: 22px; }
+    header p { display: none; }
+    #panel { left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 42%; }
+  }
+</style>
+</head>
+<body class="hand">
+<div id="stage">
+  <canvas id="gl"></canvas>
+  <canvas id="overlay"></canvas>
+</div>
+
+<header>
+  <div class="kicker">Material Study · Skin Jelly</div>
+  <h1>スキンゼリー</h1>
+  <p>ドット絵をひとつずつ固めた、ひとくちサイズ。ぷるん。</p>
+</header>
+
+<aside id="panel">
+  <h2>道具</h2>
+  <div class="seg" id="tools">
+    <button data-tool="hand" aria-pressed="true">✋ 手</button>
+    <button data-tool="knife" aria-pressed="false">🔪 ナイフ</button>
+  </div>
+  <p class="hint" id="toolHint">どこでもつまんで引っぱれます。何もないところをドラッグで回転。</p>
+
+  <h2>ゼリーの配合</h2>
+  <label class="slider">硬さ <output id="firmOut">0.40</output>
+    <input id="firm" type="range" min="0" max="1" step="0.01" value="0.4"></label>
+  <label class="slider">内部の減衰 <output id="dampOut">0.45</output>
+    <input id="damp" type="range" min="0" max="1" step="0.01" value="0.45"></label>
+
+  <h2>再生</h2>
+  <div class="seg" id="speed">
+    <button data-speed="1" aria-pressed="true">1×</button>
+    <button data-speed="0.5" aria-pressed="false">½×</button>
+    <button data-speed="0.25" aria-pressed="false">¼×</button>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <button id="pause">一時停止</button>
+    <button id="mesh" aria-pressed="false">メッシュ</button>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <button id="reset" class="btn primary">つくりなおす</button>
+  </div>
+
+  <h2>スキン</h2>
+  <div class="skin">
+    <canvas id="skinPreview" width="64" height="64"></canvas>
+    <div style="flex:1">
+      <label class="btn" for="file" style="padding:7px 10px;border-radius:7px;cursor:pointer">PNGを読み込む</label>
+      <input id="file" type="file" accept="image/png" hidden>
+      <p class="hint" style="margin-top:6px">64×64のスキンをドロップしてもOK</p>
+    </div>
+  </div>
+  <p id="err" role="alert"></p>
+
+  <h2>計測</h2>
+  <dl>
+    <dt>質量</dt><dd id="sMass">–</dd>
+    <dt>体積</dt><dd id="sVol">–</dd>
+    <dt>運動エネルギー</dt><dd id="sKe">–</dd>
+    <dt>ピース数</dt><dd id="sPieces">–</dd>
+  </dl>
+</aside>
+
+<div id="drop">スキンPNGをここにドロップ</div>
+<div id="nogl">このページには WebGL2 が必要です。</div>
+
+<script type="module">
+import { Jelly, makeParts, faceRect, PLATE_R } from './sim.js';
+
+const glCanvas = document.getElementById('gl');
+const overlay = document.getElementById('overlay');
+const ctx2d = overlay.getContext('2d');
+const gl = glCanvas.getContext('webgl2', { antialias: true, stencil: true });
+if (!gl) { document.getElementById('nogl').style.display = 'grid'; throw new Error('no webgl2'); }
+
+// ---------- math ----------
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const crs = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const nrm = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+function mul(a, b) {
+  const o = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+    let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s;
+  }
+  return o;
+}
+
+const cam = { target: [0, 14, 0], dist: 78, yaw: 0.55, pitch: 0.28, fov: 34 * Math.PI / 180 };
+let W = 1, H = 1, VP, EYE, BASIS;
+function updateCamera() {
+  const { target: t, dist, yaw, pitch, fov } = cam;
+  EYE = [t[0] + dist * Math.cos(pitch) * Math.sin(yaw), t[1] + dist * Math.sin(pitch), t[2] + dist * Math.cos(pitch) * Math.cos(yaw)];
+  const z = nrm(sub(EYE, t)), x = nrm(crs([0, 1, 0], z)), y = crs(z, x);
+  BASIS = { x, y, z };
+  const view = new Float32Array([x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, EYE), -dot(y, EYE), -dot(z, EYE), 1]);
+  const f = 1 / Math.tan(fov / 2), a = W / H, n = 1, fa = 500;
+  const proj = new Float32Array([f / a, 0, 0, 0, 0, f, 0, 0, 0, 0, (fa + n) / (n - fa), -1, 0, 0, 2 * fa * n / (n - fa), 0]);
+  VP = mul(proj, view);
+}
+function rayAt(sx, sy) {
+  const t = Math.tan(cam.fov / 2), a = W / H;
+  const nx = (sx / W) * 2 - 1, ny = 1 - (sy / H) * 2;
+  const { x, y, z } = BASIS;
+  return nrm([0, 1, 2].map((i) => -z[i] + x[i] * nx * t * a + y[i] * ny * t));
+}
+function toScreen(p) {
+  const m = VP, cw = m[3] * p[0] + m[7] * p[1] + m[11] * p[2] + m[15];
+  const cx = (m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12]) / cw;
+  const cy = (m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13]) / cw;
+  return [(cx * 0.5 + 0.5) * W, (0.5 - cy * 0.5) * H];
+}
+
+// ---------- shaders ----------
+function program(vs, fs) {
+  const p = gl.createProgram();
+  for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, '#version 300 es\nprecision highp float;\n' + src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    gl.attachShader(p, s);
+  }
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {};
+  for (let i = 0; i < gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); i++) {
+    const name = gl.getActiveUniform(p, i).name; u[name] = gl.getUniformLocation(p, name);
+  }
+  return { p, u };
+}
+const LIGHT = nrm([0.45, 1.0, 0.55]);
+
+const jellyProg = program(`
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNrm;
+layout(location=2) in vec2 aUV; layout(location=3) in vec4 aFlesh;
+uniform mat4 uVP; out vec3 vP; out vec3 vN; out vec2 vUV; out vec4 vFlesh;
+void main(){ vP=aPos; vN=aNrm; vUV=aUV; vFlesh=aFlesh; gl_Position=uVP*vec4(aPos,1.); }`, `
+in vec3 vP; in vec3 vN; in vec2 vUV; in vec4 vFlesh;
+uniform sampler2D uTex; uniform vec3 uEye; uniform vec3 uLight;
+out vec4 o;
+float hash(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719)))*43758.5453); }
+void main(){
+  vec3 N = normalize(vN); if(!gl_FrontFacing) N = -N;
+  vec3 V = normalize(uEye - vP), L = uLight, Hh = normalize(L + V);
+  vec3 base = vFlesh.a > .5 ? vFlesh.rgb : texture(uTex, vUV).rgb;
+  base = pow(base, vec3(2.2));
+  if (vFlesh.a > .5) { // cut surface: glassy interior with a few trapped bubbles
+    float b = hash(floor(vP * 2.3));
+    base *= .85 + .3 * hash(floor(vP * 5.));
+    if (b > .96) base = mix(base, vec3(1.), .55);
+  }
+  float ndl = dot(N, L);
+  float wrap = clamp(ndl * .55 + .45, 0., 1.);
+  vec3 sky = mix(vec3(.30,.26,.22), vec3(.85,.92,1.), N.y * .5 + .5);
+  vec3 col = base * (wrap * vec3(1., .96, .9) * .95 + sky * .28);
+  col += base * sqrt(base) * .45 * pow(clamp(.6 - ndl * .6, 0., 1.), 1.5); // light glowing through the gel
+  float nh = max(dot(N, Hh), 0.);
+  col += vec3(1.) * (pow(nh, 140.) * 1.6 + pow(nh, 18.) * .07);
+  col += sky * pow(1. - max(dot(N, V), 0.), 4.) * .45;
+  o = vec4(pow(col, vec3(1. / 2.2)), 1.);
+}`);
+
+const shadowProg = program(`
+layout(location=0) in vec3 aPos; uniform mat4 uVP; uniform vec3 uLight;
+void main(){ vec3 p = aPos; p.xz -= uLight.xz * (p.y / uLight.y); p.y = .03; gl_Position = uVP * vec4(p, 1.); }`, `
+uniform float uA; out vec4 o; void main(){ o = vec4(.1, .07, .04, uA); }`);
+
+const floorProg = program(`
+layout(location=0) in vec3 aPos; uniform mat4 uVP; out vec3 vP;
+void main(){ vP = aPos; gl_Position = uVP * vec4(aPos, 1.); }`, `
+in vec3 vP; uniform vec3 uBg; uniform vec3 uEye; uniform float uR; out vec4 o;
+void main(){
+  float r = length(vP.xz);
+  vec3 table = uBg * .93;
+  vec3 plate = vec3(.965, .96, .95);
+  float rim = smoothstep(uR - 4., uR - 1., r);
+  plate *= 1. - .07 * rim + .05 * smoothstep(uR - 1.5, uR - .5, r);
+  float onPlate = 1. - smoothstep(uR + 1., uR + 1.6, r);
+  float shade = 1. - .25 * smoothstep(uR + 1.4, uR + 6., r) * (1. - smoothstep(uR + 6., uR + 12., r)); // plate's own shadow
+  vec3 col = mix(table * shade, plate, onPlate);
+  col = mix(col, uBg, smoothstep(80., 180., r));
+  o = vec4(col, 1.);
+}`);
+
+const lineProg = program(`
+layout(location=0) in vec3 aPos; uniform mat4 uVP;
+void main(){ gl_Position = uVP * vec4(aPos, 1.); }`, `
+uniform vec4 uC; out vec4 o; void main(){ o = uC; }`);
+
+// ---------- buffers ----------
+const floorBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, floorBuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-200, 0, -200, 200, 0, -200, 200, 0, 200, -200, 0, -200, 200, 0, 200, -200, 0, 200]), gl.STATIC_DRAW);
+const floorVAO = gl.createVertexArray();
+gl.bindVertexArray(floorVAO); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+
+const dynBuf = gl.createBuffer(), statBuf = gl.createBuffer(), idxBuf = gl.createBuffer();
+const meshVAO = gl.createVertexArray();
+gl.bindVertexArray(meshVAO);
+gl.bindBuffer(gl.ARRAY_BUFFER, dynBuf);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+gl.bindBuffer(gl.ARRAY_BUFFER, statBuf);
+gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 24, 0);
+gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 24, 8);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+
+const wirePosBuf = gl.createBuffer(), wireIdxBuf = gl.createBuffer();
+const wireVAO = gl.createVertexArray();
+gl.bindVertexArray(wireVAO);
+gl.bindBuffer(gl.ARRAY_BUFFER, wirePosBuf);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wireIdxBuf);
+gl.bindVertexArray(null);
+
+const tex = gl.createTexture();
+
+// ---------- skin ----------
+let skinCanvas = null, fleshColors = [], slim = false;
+const skinPreview = document.getElementById('skinPreview').getContext('2d');
+const errEl = document.getElementById('err');
+
+function loadSkin(img) {
+  if (img.width !== 64 || img.height !== 64) { errEl.textContent = `64×64のスキンに対応しています（この画像は ${img.width}×${img.height}）`; return; }
+  errEl.textContent = '';
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0);
+  const src = g.getImageData(0, 0, 64, 64), px = src.data;
+  const at = (x, y) => (y * 64 + x) * 4;
+  slim = px[at(54, 20) + 3] === 0;
+  const parts = makeParts(slim);
+  // flatten the outer layer (hat, jacket…) onto the base layer
+  const out = new ImageData(new Uint8ClampedArray(px), 64, 64);
+  for (const p of parts) for (let dir = 0; dir < 6; dir++) {
+    const r = faceRect(p, dir), [w, h, d] = p.size;
+    const fw = dir < 2 ? d : w, fh = dir === 2 || dir === 3 ? d : h;
+    for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) {
+      const ov = at(r.o[0] - p.uv[0] + p.ov[0] + x, r.o[1] - p.uv[1] + p.ov[1] + y), b = at(r.o[0] + x, r.o[1] + y);
+      const a = px[ov + 3] / 255;
+      for (let k = 0; k < 3; k++) out.data[b + k] = px[b + k] * (1 - a) + px[ov + k] * a;
+      out.data[b + 3] = 255;
+    }
+  }
+  // cut-surface colour for each part: its front face averaged, a little lighter
+  fleshColors = parts.map((p) => {
+    const r = faceRect(p, 4); let s = [0, 0, 0];
+    for (let y = 0; y < p.size[1]; y++) for (let x = 0; x < p.size[0]; x++) { const i = at(r.o[0] + x, r.o[1] + y); for (let k = 0; k < 3; k++) s[k] += out.data[i + k]; }
+    const n = p.size[0] * p.size[1];
+    return s.map((v) => Math.min(1, (v / n / 255) * 0.8 + 0.2));
+  });
+  g.putImageData(out, 0, 0);
+  skinCanvas = c;
+  skinPreview.clearRect(0, 0, 64, 64); skinPreview.drawImage(img, 0, 0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  newJelly(parts);
+}
+function loadSkinFromBlob(blob) {
+  const img = new Image();
+  img.onload = () => { loadSkin(img); URL.revokeObjectURL(img.src); };
+  img.onerror = () => { errEl.textContent = '画像を読み込めませんでした'; };
+  img.src = URL.createObjectURL(blob);
+}
+
+// ---------- sim + mesh ----------
+let sim = null, meshVersion = -1, nRenderVerts = 0, nIdx = 0, nWire = 0;
+let renderSimIdx, renderNKey, dyn, nacc;
+
+function newJelly(parts) {
+  sim = new Jelly(parts);
+  sim.firmness = +firm.value; sim.damping = +damp.value;
+  meshVersion = -1;
+}
+
+function rebuildMesh() {
+  const q = sim.quads, nQ = q.length / 7;
+  nRenderVerts = nQ * 4; nIdx = nQ * 6;
+  renderSimIdx = new Int32Array(nRenderVerts); renderNKey = new Int32Array(nRenderVerts);
+  const stat = new Float32Array(nRenderVerts * 6), idx = new Uint32Array(nIdx);
+  for (let f = 0; f < nQ; f++) {
+    const dir = q[f * 7 + 4], cell = q[f * 7 + 5], skin = q[f * 7 + 6];
+    const part = sim.parts[sim.cellPart[cell]], pi = sim.cellPart[cell];
+    const r = skin ? faceRect(part, dir) : null;
+    for (let k = 0; k < 4; k++) {
+      const v = q[f * 7 + k], rv = f * 4 + k;
+      renderSimIdx[rv] = v; renderNKey[rv] = v * 6 + dir;
+      if (skin) {
+        const P = [sim.rest[v * 3], sim.rest[v * 3 + 1], sim.rest[v * 3 + 2]];
+        const along = ([ax, s]) => (s > 0 ? P[ax] - part.min[ax] : part.min[ax] + part.size[ax] - P[ax]);
+        stat[rv * 6] = (r.o[0] + along(r.u)) / 64;
+        stat[rv * 6 + 1] = (r.o[1] + along(r.v)) / 64;
+      } else {
+        stat.set([0, 0, ...fleshColors[pi], 1], rv * 6);
+      }
+    }
+    idx.set([f * 4, f * 4 + 1, f * 4 + 2, f * 4, f * 4 + 2, f * 4 + 3], f * 6);
+  }
+  dyn = new Float32Array(nRenderVerts * 6);
+  nacc = new Float32Array(sim.n * 6 * 3);
+  gl.bindBuffer(gl.ARRAY_BUFFER, statBuf); gl.bufferData(gl.ARRAY_BUFFER, stat, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, dynBuf); gl.bufferData(gl.ARRAY_BUFFER, dyn.byteLength, gl.DYNAMIC_DRAW);
+  gl.bindVertexArray(meshVAO); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+  gl.bindVertexArray(wireVAO); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wireIdxBuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Uint32Array.from(sim.edges), gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  nWire = sim.edges.length;
+  meshVersion = sim.surfaceVersion;
+}
+
+function updateMesh() {
+  const q = sim.quads, x = sim.x, nQ = q.length / 7;
+  nacc.fill(0);
+  for (let f = 0; f < nQ; f++) {
+    const a = q[f * 7] * 3, b = q[f * 7 + 1] * 3, c = q[f * 7 + 2] * 3, d = q[f * 7 + 3] * 3, dir = q[f * 7 + 4];
+    const d1 = [x[c] - x[a], x[c + 1] - x[a + 1], x[c + 2] - x[a + 2]];
+    const d2 = [x[d] - x[b], x[d + 1] - x[b + 1], x[d + 2] - x[b + 2]];
+    const n = crs(d1, d2);
+    for (let k = 0; k < 4; k++) { const key = (q[f * 7 + k] * 6 + dir) * 3; nacc[key] += n[0]; nacc[key + 1] += n[1]; nacc[key + 2] += n[2]; }
+  }
+  for (let rv = 0; rv < nRenderVerts; rv++) {
+    const v = renderSimIdx[rv] * 3, k = renderNKey[rv] * 3, o = rv * 6;
+    dyn[o] = x[v]; dyn[o + 1] = x[v + 1]; dyn[o + 2] = x[v + 2];
+    dyn[o + 3] = nacc[k]; dyn[o + 4] = nacc[k + 1]; dyn[o + 5] = nacc[k + 2];
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, dynBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, dyn);
+  if (showMesh) { gl.bindBuffer(gl.ARRAY_BUFFER, wirePosBuf); gl.bufferData(gl.ARRAY_BUFFER, x, gl.DYNAMIC_DRAW); }
+}
+
+// ---------- picking ----------
+function pick(o, d) {
+  const q = sim.quads, x = sim.x, nQ = q.length / 7;
+  let best = Infinity, hitV = -1;
+  const P = (i) => [x[i * 3], x[i * 3 + 1], x[i * 3 + 2]];
+  for (let f = 0; f < nQ; f++) {
+    const vs = [q[f * 7], q[f * 7 + 1], q[f * 7 + 2], q[f * 7 + 3]];
+    for (const [i, j, k] of [[0, 1, 2], [0, 2, 3]]) {
+      const a = P(vs[i]), e1 = sub(P(vs[j]), a), e2 = sub(P(vs[k]), a);
+      const p = crs(d, e2), det = dot(e1, p);
+      if (Math.abs(det) < 1e-9) continue;
+      const tv = sub(o, a), u = dot(tv, p) / det; if (u < 0 || u > 1) continue;
+      const qq = crs(tv, e1), v = dot(d, qq) / det; if (v < 0 || u + v > 1) continue;
+      const t = dot(e2, qq) / det;
+      if (t > 0 && t < best) { best = t; hitV = vs[i]; }
+    }
+  }
+  return hitV < 0 ? null : { t: best, v: hitV, point: [o[0] + d[0] * best, o[1] + d[1] * best, o[2] + d[2] * best] };
+}
+
+// ---------- interaction ----------
+let tool = 'hand', drag = null, knifeTrail = [];
+const $ = (id) => document.getElementById(id);
+const firm = $('firm'), damp = $('damp');
+
+function localXY(e) { const r = glCanvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+
+glCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
+glCanvas.addEventListener('pointerdown', (e) => {
+  glCanvas.setPointerCapture(e.pointerId);
+  const [sx, sy] = localXY(e);
+  const orbit = e.button === 1 || e.button === 2 || e.shiftKey;
+  if (!orbit && tool === 'knife') { drag = { mode: 'knife', a: [sx, sy], b: [sx, sy] }; return; }
+  if (!orbit && tool === 'hand') {
+    const hit = pick(EYE, rayAt(sx, sy));
+    if (hit) {
+      const ids = [], offs = [], pc = sim.piece[hit.v], x = sim.x;
+      for (let i = 0; i < sim.n; i++) {
+        if (sim.piece[i] !== pc) continue;
+        const d = [x[i * 3] - hit.point[0], x[i * 3 + 1] - hit.point[1], x[i * 3 + 2] - hit.point[2]];
+        if (Math.hypot(...d) < 1.8) { ids.push(i); offs.push(...d); }
+      }
+      if (!ids.length) ids.push(hit.v), offs.push(0, 0, 0);
+      sim.grab = { ids: Int32Array.from(ids), offs: Float32Array.from(offs), target: hit.point.slice() };
+      drag = { mode: 'grab', plane: hit.point.slice(), n: BASIS.z };
+      document.body.classList.add('grabbing');
+      return;
+    }
+  }
+  drag = { mode: 'orbit', last: [sx, sy] };
+});
+glCanvas.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const [sx, sy] = localXY(e);
+  if (drag.mode === 'orbit') {
+    cam.yaw -= (sx - drag.last[0]) * 0.008;
+    cam.pitch = Math.min(1.4, Math.max(-0.05, cam.pitch + (sy - drag.last[1]) * 0.006));
+    drag.last = [sx, sy];
+  } else if (drag.mode === 'grab') {
+    const d = rayAt(sx, sy), t = dot(sub(drag.plane, EYE), drag.n) / dot(d, drag.n);
+    if (t > 0) sim.grab.target = [EYE[0] + d[0] * t, Math.max(0, EYE[1] + d[1] * t), EYE[2] + d[2] * t];
+  } else if (drag.mode === 'knife') {
+    drag.b = [sx, sy];
+  }
+});
+function endDrag() {
+  if (!drag) return;
+  if (drag.mode === 'grab') sim.grab = null;
+  else if (drag.mode === 'knife') doCut(drag.a, drag.b);
+  document.body.classList.remove('grabbing');
+  drag = null;
+}
+glCanvas.addEventListener('pointerup', endDrag);
+glCanvas.addEventListener('pointercancel', endDrag);
+glCanvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.dist = Math.min(180, Math.max(30, cam.dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+
+function doCut(A, B) {
+  const len = Math.hypot(B[0] - A[0], B[1] - A[1]);
+  if (len < 12) return;
+  const n = nrm(crs(rayAt(...A), rayAt(...B))), d = dot(n, EYE);
+  const ab = [B[0] - A[0], B[1] - A[1]];
+  const inStroke = (x, y, z) => {
+    const s = toScreen([x, y, z]), t = ((s[0] - A[0]) * ab[0] + (s[1] - A[1]) * ab[1]) / (len * len);
+    return t > -0.01 && t < 1.01;
+  };
+  sim.cut(n, d, inStroke);
+  knifeTrail.push({ a: A, b: B, t: performance.now() });
+}
+
+// ---------- UI ----------
+const hints = {
+  hand: 'どこでもつまんで引っぱれます。何もないところをドラッグで回転。',
+  knife: 'ドラッグした線でまっすぐ切ります。右ドラッグ／Shift+ドラッグで回転。',
+};
+$('tools').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  tool = b.dataset.tool;
+  for (const x of $('tools').children) x.setAttribute('aria-pressed', x === b);
+  document.body.className = tool;
+  $('toolHint').textContent = hints[tool];
+});
+let speed = 1, paused = false, showMesh = false;
+$('speed').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  speed = +b.dataset.speed;
+  for (const x of $('speed').children) x.setAttribute('aria-pressed', x === b);
+});
+$('pause').addEventListener('click', (e) => { paused = !paused; e.target.textContent = paused ? '再生' : '一時停止'; });
+$('mesh').addEventListener('click', (e) => { showMesh = !showMesh; e.target.setAttribute('aria-pressed', showMesh); e.target.style.fontWeight = showMesh ? 600 : ''; });
+$('reset').addEventListener('click', () => { sim.reset(); knifeTrail = []; });
+firm.addEventListener('input', () => { sim.firmness = +firm.value; $('firmOut').textContent = (+firm.value).toFixed(2); });
+damp.addEventListener('input', () => { sim.damping = +damp.value; $('dampOut').textContent = (+damp.value).toFixed(2); });
+$('file').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) loadSkinFromBlob(f); e.target.value = ''; });
+addEventListener('dragover', (e) => { e.preventDefault(); document.body.classList.add('dragging'); });
+addEventListener('dragleave', (e) => { if (!e.relatedTarget) document.body.classList.remove('dragging'); });
+addEventListener('drop', (e) => {
+  e.preventDefault(); document.body.classList.remove('dragging');
+  const f = e.dataTransfer.files[0]; if (f) loadSkinFromBlob(f);
+});
+
+// ---------- frame ----------
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  W = glCanvas.clientWidth; H = glCanvas.clientHeight;
+  for (const c of [glCanvas, overlay]) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
+  ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+addEventListener('resize', resize);
+resize();
+
+function bgColor() {
+  const c = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  const m = c.match(/^#(..)(..)(..)$/);
+  return m ? m.slice(1).map((h) => parseInt(h, 16) / 255) : [0.94, 0.91, 0.87];
+}
+let BG = bgColor();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => (BG = bgColor()));
+
+let last = performance.now(), frame = 0;
+function draw(now) {
+  const dt = Math.min((now - last) / 1000, 1 / 30); last = now;
+  if (sim && !paused) sim.step(dt * speed);
+  if (!sim) { requestAnimationFrame(draw); return; }
+  if (meshVersion !== sim.surfaceVersion) rebuildMesh();
+  updateCamera();
+  updateMesh();
+
+  gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+  gl.clearColor(BG[0], BG[1], BG[2], 1); gl.clearStencil(0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+
+  gl.useProgram(floorProg.p);
+  gl.uniformMatrix4fv(floorProg.u.uVP, false, VP);
+  gl.uniform3fv(floorProg.u.uBg, BG); gl.uniform1f(floorProg.u.uR, PLATE_R + 3);
+  gl.bindVertexArray(floorVAO); gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  // planar shadow, stencilled so overlaps don't double-darken
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.enable(gl.STENCIL_TEST); gl.stencilFunc(gl.EQUAL, 0, 0xff); gl.stencilOp(gl.KEEP, gl.KEEP, gl.INCR);
+  gl.depthMask(false);
+  gl.useProgram(shadowProg.p);
+  gl.uniformMatrix4fv(shadowProg.u.uVP, false, VP); gl.uniform3fv(shadowProg.u.uLight, LIGHT); gl.uniform1f(shadowProg.u.uA, 0.2);
+  gl.bindVertexArray(meshVAO); gl.drawElements(gl.TRIANGLES, nIdx, gl.UNSIGNED_INT, 0);
+  gl.depthMask(true); gl.disable(gl.STENCIL_TEST); gl.disable(gl.BLEND);
+
+  gl.useProgram(jellyProg.p);
+  gl.uniformMatrix4fv(jellyProg.u.uVP, false, VP);
+  gl.uniform3fv(jellyProg.u.uEye, EYE); gl.uniform3fv(jellyProg.u.uLight, LIGHT);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(jellyProg.u.uTex, 0);
+  gl.drawElements(gl.TRIANGLES, nIdx, gl.UNSIGNED_INT, 0);
+
+  if (showMesh) {
+    gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND);
+    gl.useProgram(lineProg.p);
+    gl.uniformMatrix4fv(lineProg.u.uVP, false, VP); gl.uniform4f(lineProg.u.uC, 0.08, 0.1, 0.08, 0.13);
+    gl.bindVertexArray(wireVAO); gl.drawElements(gl.LINES, nWire, gl.UNSIGNED_INT, 0);
+    gl.disable(gl.BLEND);
+  }
+  gl.bindVertexArray(null);
+
+  drawOverlay(now);
+  if (++frame % 10 === 0) showStats();
+  requestAnimationFrame(draw);
+}
+
+function drawOverlay(now) {
+  ctx2d.clearRect(0, 0, W, H);
+  ctx2d.lineCap = 'round';
+  knifeTrail = knifeTrail.filter((k) => now - k.t < 500);
+  for (const k of knifeTrail) {
+    const a = 1 - (now - k.t) / 500;
+    ctx2d.strokeStyle = `rgba(255,255,255,${0.8 * a})`; ctx2d.lineWidth = 3;
+    ctx2d.beginPath(); ctx2d.moveTo(...k.a); ctx2d.lineTo(...k.b); ctx2d.stroke();
+  }
+  if (drag && drag.mode === 'grab' && sim.grab) {
+    const { ids, offs, target } = sim.grab, c = [0, 0, 0], g = [0, 0, 0];
+    for (let j = 0; j < ids.length; j++) for (let a = 0; a < 3; a++) { c[a] += sim.x[ids[j] * 3 + a] / ids.length; g[a] += (target[a] + offs[j * 3 + a]) / ids.length; }
+    const p = toScreen(c), q = toScreen(g);
+    ctx2d.strokeStyle = 'rgba(40,30,20,.45)'; ctx2d.lineWidth = 1.5;
+    ctx2d.beginPath(); ctx2d.moveTo(...p); ctx2d.lineTo(...q); ctx2d.stroke();
+    ctx2d.fillStyle = 'rgba(40,30,20,.6)';
+    ctx2d.beginPath(); ctx2d.arc(...q, 3.5, 0, Math.PI * 2); ctx2d.fill();
+  }
+  if (drag && drag.mode === 'knife') {
+    ctx2d.setLineDash([6, 6]); ctx2d.strokeStyle = 'rgba(40,30,20,.7)'; ctx2d.lineWidth = 1.5;
+    ctx2d.beginPath(); ctx2d.moveTo(...drag.a); ctx2d.lineTo(...drag.b); ctx2d.stroke(); ctx2d.setLineDash([]);
+  }
+}
+
+function showStats() {
+  const s = sim.stats();
+  $('sMass').textContent = s.mass.toFixed(1) + ' g';
+  $('sVol').textContent = (s.volume * 100).toFixed(1) + ' %';
+  $('sKe').textContent = s.keMicroJ.toFixed(s.keMicroJ < 10 ? 2 : 0) + ' μJ';
+  $('sPieces').textContent = s.pieces;
+}
+
+fetch('src/mc-skin.png').then((r) => r.blob()).then(loadSkinFromBlob);
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
