@@ -276,7 +276,9 @@ export class Jelly {
         x[i * 3 + 2] = prev[i * 3 + 2] + (x[i * 3 + 2] - prev[i * 3 + 2]) * 0.3;
       }
     }
-    for (let i = 0; i < n * 3; i++) v[i] = (x[i] - prev[i]) / h;
+    // cap speed: violent spinning can make the volume solve feed energy back each substep and explode to NaN
+    const VMAX = 1000;
+    for (let i = 0; i < n * 3; i++) v[i] = Math.max(-VMAX, Math.min(VMAX, (x[i] - prev[i]) / h));
     this.dampen(h);
   }
 
