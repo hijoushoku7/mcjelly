@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>スキンゼリー</title>
-<meta name="description" content="Minecraftスキンを、ぷるぷるのゼリーに。つまんで、引っぱって、ナイフで切れる物理シミュレーション。">
+<title>mcjelly</title>
+<meta name="description" content="Turn a Minecraft skin into wobbly jelly. A physics sim you can pinch, stretch and slice with a knife.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;600;700&display=swap">
 <style>
@@ -105,74 +105,79 @@
 
 <header>
   <div class="kicker">Material Study · Skin Jelly</div>
-  <h1>スキンゼリー</h1>
-  <p>ドット絵をひとつずつ固めた、ひとくちサイズ。ぷるん。</p>
+  <h1 data-ja="スキンゼリー">Skin Jelly</h1>
+  <p data-ja="ドット絵をひとつずつ固めた、ひとくちサイズ。ぷるん。">Pixel art set one pixel at a time, bite-sized. Wobble.</p>
 </header>
 
-<dialog id="panel" open aria-label="オプション">
-  <h2>道具</h2>
+<dialog id="panel" open aria-label="Options">
+  <h2 data-ja="道具">Tools</h2>
   <div class="seg" id="tools">
-    <button data-tool="hand" aria-pressed="true">✋ 手</button>
-    <button data-tool="knife" aria-pressed="false">🔪 ナイフ</button>
+    <button data-tool="hand" aria-pressed="true" data-ja="✋ 手">✋ Hand</button>
+    <button data-tool="knife" aria-pressed="false" data-ja="🔪 ナイフ">🔪 Knife</button>
   </div>
-  <p class="hint" id="toolHint">どこでもつまんで引っぱれます。何もないところをドラッグ／2本指で回転、ピンチでズーム。</p>
+  <p class="hint" id="toolHint"></p>
 
-  <h2>ゼリーの配合</h2>
-  <label class="slider">硬さ <output id="firmOut">0.40</output>
+  <h2 data-ja="ゼリーの配合">Jelly recipe</h2>
+  <label class="slider"><span data-ja="硬さ">Firmness</span> <output id="firmOut">0.40</output>
     <input id="firm" type="range" min="0" max="1" step="0.01" value="0.4"></label>
-  <label class="slider">内部の減衰 <output id="dampOut">0.45</output>
+  <label class="slider"><span data-ja="内部の減衰">Internal damping</span> <output id="dampOut">0.45</output>
     <input id="damp" type="range" min="0" max="1" step="0.01" value="0.45"></label>
 
-  <h2>再生</h2>
+  <h2 data-ja="再生">Playback</h2>
   <div class="seg" id="speed">
     <button data-speed="1" aria-pressed="true">1×</button>
     <button data-speed="0.5" aria-pressed="false">½×</button>
     <button data-speed="0.25" aria-pressed="false">¼×</button>
   </div>
   <div class="row" style="margin-top:6px">
-    <button id="pause">一時停止</button>
-    <button id="mesh" aria-pressed="false">メッシュ</button>
+    <button id="pause"></button>
+    <button id="mesh" aria-pressed="false" data-ja="メッシュ">Mesh</button>
   </div>
   <div class="row" style="margin-top:6px">
-    <button id="reset" class="btn primary">つくりなおす</button>
+    <button id="reset" class="btn primary" data-ja="つくりなおす">Rebuild</button>
   </div>
 
-  <h2>スキン</h2>
+  <h2 data-ja="スキン">Skin</h2>
   <div class="skin">
     <canvas id="skinPreview" width="64" height="64"></canvas>
     <div style="flex:1">
-      <label class="btn" for="file" style="padding:7px 10px;border-radius:7px;cursor:pointer">PNGを読み込む</label>
+      <label class="btn" for="file" style="padding:7px 10px;border-radius:7px;cursor:pointer" data-ja="PNGを読み込む">Load PNG</label>
       <input id="file" type="file" accept="image/png" hidden>
-      <p class="hint" style="margin-top:6px">64×64・64×32のスキンをドロップしてもOK</p>
+      <p class="hint" style="margin-top:6px" data-ja="64×64・64×32のスキンをドロップしてもOK">Or drop a 64×64 / 64×32 skin</p>
     </div>
   </div>
   <form id="byName">
-    <input id="mcName" placeholder="プレイヤー名" aria-label="プレイヤー名" required pattern="[A-Za-z0-9_]{1,16}" autocomplete="off" spellcheck="false">
-    <button class="btn">取得</button>
+    <input id="mcName" placeholder="Player name" aria-label="Player name" required pattern="[A-Za-z0-9_]{1,16}" autocomplete="off" spellcheck="false">
+    <button class="btn" data-ja="取得">Fetch</button>
   </form>
-  <p class="hint">Java版のプレイヤー名を入れると、そのスキンを取ってきてゼリーにします。</p>
+  <p class="hint" data-ja="Java版のプレイヤー名を入れると、そのスキンを取ってきてゼリーにします。">Enter a Java Edition player name to fetch their skin and turn it into jelly.</p>
   <p id="err" role="alert"></p>
 
-  <h2>計測</h2>
+  <h2 data-ja="計測">Stats</h2>
   <dl>
-    <dt>質量</dt><dd id="sMass">–</dd>
-    <dt>体積</dt><dd id="sVol">–</dd>
-    <dt>運動エネルギー</dt><dd id="sKe">–</dd>
-    <dt>ピース数</dt><dd id="sPieces">–</dd>
+    <dt data-ja="質量">Mass</dt><dd id="sMass">–</dd>
+    <dt data-ja="体積">Volume</dt><dd id="sVol">–</dd>
+    <dt data-ja="運動エネルギー">Kinetic energy</dt><dd id="sKe">–</dd>
+    <dt data-ja="ピース数">Pieces</dt><dd id="sPieces">–</dd>
   </dl>
-  <button id="optsClose" class="btn">閉じる</button>
+  <h2 data-ja="言語">Language</h2>
+  <div class="seg" id="lang">
+    <button data-lang="en" aria-pressed="true">English</button>
+    <button data-lang="ja" aria-pressed="false">日本語</button>
+  </div>
+  <button id="optsClose" class="btn" data-ja="閉じる">Close</button>
 </dialog>
 
 <nav id="bar">
   <div class="seg">
-    <button data-tool="hand" aria-pressed="true">✋ 手</button>
-    <button data-tool="knife" aria-pressed="false">🔪 ナイフ</button>
+    <button data-tool="hand" aria-pressed="true" data-ja="✋ 手">✋ Hand</button>
+    <button data-tool="knife" aria-pressed="false" data-ja="🔪 ナイフ">🔪 Knife</button>
   </div>
-  <button id="optsBtn" class="btn">⚙ 設定</button>
+  <button id="optsBtn" class="btn" data-ja="⚙ 設定">⚙ Settings</button>
 </nav>
 
-<div id="drop">スキンPNGをここにドロップ</div>
-<div id="nogl">このページには WebGL2 が必要です。</div>
+<div id="drop" data-ja="スキンPNGをここにドロップ">Drop a skin PNG here</div>
+<div id="nogl" data-ja="このページには WebGL2 が必要です。">This page needs WebGL2.</div>
 
 <script type="module">
 import { Jelly, makeParts, faceRect, PLATE_R } from './sim.js';
@@ -331,7 +336,7 @@ const skinPreview = document.getElementById('skinPreview').getContext('2d');
 const errEl = document.getElementById('err');
 
 function loadSkin(img) {
-  if (img.width !== 64 || (img.height !== 64 && img.height !== 32)) { errEl.textContent = `64×64か64×32のスキンに対応しています（この画像は ${img.width}×${img.height}）`; return; }
+  if (img.width !== 64 || (img.height !== 64 && img.height !== 32)) { errEl.textContent = L(`Only 64×64 or 64×32 skins are supported (this one is ${img.width}×${img.height})`, `64×64か64×32のスキンに対応しています（この画像は ${img.width}×${img.height}）`); return; }
   errEl.textContent = '';
   const c = document.createElement('canvas'); c.width = c.height = 64;
   const g = c.getContext('2d', { willReadFrequently: true });
@@ -382,7 +387,7 @@ function upgradeLegacy(g) {
 function loadSkinFromBlob(blob) {
   const img = new Image();
   img.onload = () => { loadSkin(img); URL.revokeObjectURL(img.src); };
-  img.onerror = () => { errEl.textContent = '画像を読み込めませんでした'; };
+  img.onerror = () => { errEl.textContent = L('Could not load the image', '画像を読み込めませんでした'); };
   img.src = URL.createObjectURL(blob);
 }
 
@@ -486,6 +491,8 @@ function pick(o, d) {
 // ---------- interaction ----------
 let tool = 'hand', drag = null, knifeTrail = [];
 const $ = (id) => document.getElementById(id);
+let lang = 'en';
+const L = (en, ja) => lang === 'ja' ? ja : en;
 const firm = $('firm'), damp = $('damp');
 
 function localXY(e) { const r = glCanvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
@@ -593,15 +600,15 @@ function doCut(A, B) {
 
 // ---------- UI ----------
 const hints = {
-  hand: 'どこでもつまんで引っぱれます。何もないところをドラッグ／2本指で回転、ピンチでズーム。',
-  knife: 'ドラッグした線でまっすぐ切ります。右ドラッグ／Shift+ドラッグ／2本指で回転。',
+  hand: ['Grab anywhere and pull. Drag empty space / two fingers to rotate, pinch to zoom.', 'どこでもつまんで引っぱれます。何もないところをドラッグ／2本指で回転、ピンチでズーム。'],
+  knife: ['Drag a line to slice straight through. Right-drag / Shift+drag / two fingers to rotate.', 'ドラッグした線でまっすぐ切ります。右ドラッグ／Shift+ドラッグ／2本指で回転。'],
 };
 const toolBtns = document.querySelectorAll('[data-tool]');
 for (const b of toolBtns) b.addEventListener('click', () => {
   tool = b.dataset.tool;
   for (const x of toolBtns) x.setAttribute('aria-pressed', x.dataset.tool === tool);
   document.body.className = tool;
-  $('toolHint').textContent = hints[tool];
+  $('toolHint').textContent = L(...hints[tool]);
 });
 // options panel: plain non-modal dialog on desktop, modal sheet on phones (CSS hides it when not :modal)
 const panel = $('panel');
@@ -618,7 +625,22 @@ $('speed').addEventListener('click', (e) => {
   speed = +b.dataset.speed;
   for (const x of $('speed').children) x.setAttribute('aria-pressed', x === b);
 });
-$('pause').addEventListener('click', (e) => { paused = !paused; e.target.textContent = paused ? '再生' : '一時停止'; });
+// language: English by default; [data-ja] elements hold their Japanese text, the English is stashed on first switch
+$('lang').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setLang(b.dataset.lang); });
+function setLang(l) {
+  lang = l;
+  try { localStorage.setItem('lang', l); } catch {}
+  document.documentElement.lang = l;
+  for (const el of document.querySelectorAll('[data-ja]')) { el.dataset.en ??= el.textContent; el.textContent = el.dataset[l]; }
+  for (const x of $('lang').children) x.setAttribute('aria-pressed', x.dataset.lang === l);
+  $('mcName').placeholder = L('Player name', 'プレイヤー名'); $('mcName').ariaLabel = $('mcName').placeholder;
+  $('panel').ariaLabel = L('Options', 'オプション');
+  $('toolHint').textContent = L(...hints[tool]);
+  $('pause').textContent = paused ? L('Play', '再生') : L('Pause', '一時停止');
+}
+let savedLang; try { savedLang = localStorage.getItem('lang'); } catch {}
+setLang(savedLang === 'ja' ? 'ja' : 'en');
+$('pause').addEventListener('click', (e) => { paused = !paused; e.target.textContent = paused ? L('Play', '再生') : L('Pause', '一時停止'); });
 $('mesh').addEventListener('click', (e) => { showMesh = !showMesh; e.target.setAttribute('aria-pressed', showMesh); e.target.style.fontWeight = showMesh ? 600 : ''; });
 $('reset').addEventListener('click', () => { sim.reset(); knifeTrail = []; });
 firm.addEventListener('input', () => { sim.firmness = +firm.value; $('firmOut').textContent = (+firm.value).toFixed(2); });
@@ -629,14 +651,14 @@ $('byName').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = e.currentTarget, btn = form.querySelector('button'), name = $('mcName').value.trim();
   errEl.textContent = '';
-  form.setAttribute('aria-busy', 'true'); btn.disabled = true; btn.textContent = '取得中…';
+  form.setAttribute('aria-busy', 'true'); btn.disabled = true; btn.textContent = L('Fetching…', '取得中…');
   try {
     for (const base of ['https://mc-heads.net/skin/', 'https://minotar.net/skin/']) {
       try { const r = await fetch(base + name); if (r.ok) return loadSkinFromBlob(await r.blob()); } catch {}
     }
-    errEl.textContent = `「${name}」のスキンを取得できませんでした`;
+    errEl.textContent = L(`Couldn't fetch the skin for "${name}"`, `「${name}」のスキンを取得できませんでした`);
   } finally {
-    form.removeAttribute('aria-busy'); btn.disabled = false; btn.textContent = '取得';
+    form.removeAttribute('aria-busy'); btn.disabled = false; btn.textContent = L('Fetch', '取得');
   }
 });
 addEventListener('dragover', (e) => { e.preventDefault(); document.body.classList.add('dragging'); });
