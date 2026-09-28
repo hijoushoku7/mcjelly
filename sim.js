@@ -114,7 +114,7 @@ export class Jelly {
       slotVert[s] = v;
     }
     const x = new Float32Array(n * 3), v = new Float32Array(n * 3), rest = new Float32Array(n * 3), lat = new Int32Array(n), count = new Float32Array(n);
-    const stuck = new Uint8Array(n); // soles set onto the plate, like jelly out of a mould
+    const stuck = new Uint8Array(n); // soles still in their moulded spot (not glued, just marks the piece for mould memory)
     for (let s = 0; s < nC * 8; s++) {
       const i = slotVert[s], L = slotLat[s];
       lat[i] = L; count[i]++;
@@ -292,9 +292,7 @@ export class Jelly {
     for (let i = 0; i < n; i++) {
       if (!stuck[i]) continue;
       const dx = rest[i * 3] - x[i * 3], dy = rest[i * 3 + 1] - x[i * 3 + 1], dz = rest[i * 3 + 2] - x[i * 3 + 2];
-      if (dx * dx + dy * dy + dz * dz > 4) { stuck[i] = 0; continue; } // pulled hard enough: peels off
-      const k = w[i] / (w[i] + 2e-6 / (h * h));
-      x[i * 3] += dx * k; x[i * 3 + 1] += dy * k; x[i * 3 + 2] += dz * k;
+      if (dx * dx + dy * dy + dz * dz > 4) stuck[i] = 0; // lifted/slid away: piece leaves the mould pose
     }
     for (let i = 0; i < n * 3; i++) v[i] = (x[i] - prev[i]) / h;
     this.dampen(h);
