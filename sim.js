@@ -57,7 +57,7 @@ export class Jelly {
     this.firmness = 0.4;
     this.damping = 0.45;
     this.gravity = 250;
-    this.substeps = 10;
+    this.maxSubstep = 1 / 1200; // fixed ceiling so stiffness doesn't depend on frame rate; at 600 Hz it can't hold itself up
     this.grab = null;
     this.grabCompliance = 4e-6; // larger = the held spot lags and stretches more
     this.cuts = [];
@@ -207,8 +207,8 @@ export class Jelly {
   reset() { this.cuts = []; this.grab = null; this.rebuild(null); }
 
   step(dt) {
-    const h = dt / this.substeps;
-    for (let s = 0; s < this.substeps; s++) this.substep(h);
+    const n = Math.ceil(dt / this.maxSubstep - 1e-6), h = dt / n;
+    for (let s = 0; s < n; s++) this.substep(h);
   }
 
   substep(h) {

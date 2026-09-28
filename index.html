@@ -696,7 +696,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => (BG 
 
 let last = performance.now(), frame = 0;
 function draw(now) {
-  const dt = Math.min((now - last) / 1000, 1 / 30); last = now;
+  const dt = Math.min((now - last) / 1000, 1 / 60); // slow devices go slow-mo rather than piling up substeps last = now;
   if (sim && !paused) sim.step(dt * speed);
   if (!sim) { requestAnimationFrame(draw); return; }
   if (meshVersion !== sim.surfaceVersion) rebuildMesh();
