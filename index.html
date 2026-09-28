@@ -96,6 +96,7 @@
     #top > form { display: flex; flex: 1; min-width: 0; }
     #resetTop { display: block; font-size: 18px; }
     #top input { background: var(--card); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+    .byName input { font-size: 16px; } /* iOS Safari zooms into inputs under 16px on focus */
     #top button { flex: none; box-shadow: var(--shadow); }
     #panel:not(:modal) { display: none; }
     #panel:modal { inset: auto 0 0 0; width: auto; max-width: none; max-height: 85dvh; border-radius: 16px 16px 0 0;
