@@ -15,6 +15,7 @@
     --card: rgba(246, 249, 251, .8); --accent: #4cb4dc; --accent-ink: #062431;
     --accent-soft: rgba(76, 180, 220, .16); --shadow: 0 12px 32px rgba(20, 34, 46, .12);
     --mono: "JetBrains Mono", ui-monospace, monospace;
+    --stop: #c93a42; --go: #1f7a43;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -57,6 +58,9 @@
   .row button, .btn { flex: 1; background: var(--line); }
   .row button:hover, .btn:hover { background: var(--accent-soft); }
   .btn.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  #pause { background: var(--stop); color: #fff; font-weight: 600; }
+  #pause[aria-pressed="true"] { background: var(--go); }
+  #pause:hover { filter: brightness(1.1); }
   .btn.primary:hover { background: var(--accent); filter: brightness(1.08); }
   label.slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin: 8px 0; }
   label.slider output { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
@@ -132,7 +136,7 @@
     <button data-speed="0.25" aria-pressed="false">¼×</button>
   </div>
   <div class="row" style="margin-top:6px">
-    <button id="pause"></button>
+    <button id="pause" aria-pressed="false"></button>
     <button id="mesh" aria-pressed="false" data-ja="メッシュ">Mesh</button>
   </div>
   <div class="row" style="margin-top:6px">
@@ -642,7 +646,7 @@ function setLang(l) {
 }
 let savedLang; try { savedLang = localStorage.getItem('lang'); } catch {}
 setLang(savedLang === 'ja' ? 'ja' : 'en');
-$('pause').addEventListener('click', (e) => { paused = !paused; e.target.textContent = paused ? L('Play', '再生') : L('Pause', '一時停止'); });
+$('pause').addEventListener('click', (e) => { paused = !paused; e.target.setAttribute('aria-pressed', paused); e.target.textContent = paused ? L('Play', '再生') : L('Pause', '一時停止'); });
 $('mesh').addEventListener('click', (e) => { showMesh = !showMesh; e.target.setAttribute('aria-pressed', showMesh); e.target.style.fontWeight = showMesh ? 600 : ''; });
 $('reset').addEventListener('click', () => { sim.reset(); knifeTrail = []; });
 firm.addEventListener('input', () => { sim.firmness = +firm.value; $('firmOut').textContent = (+firm.value).toFixed(2); });
