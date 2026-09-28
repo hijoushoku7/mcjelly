@@ -154,10 +154,12 @@
     <button data-speed="0.5" aria-pressed="false">½×</button>
     <button data-speed="0.25" aria-pressed="false">¼×</button>
   </div>
-  <div class="seg" id="fps" style="margin-top:6px">
+  <p class="hint" style="margin:8px 0 4px">FPS</p>
+  <div class="seg" id="fps" role="group" aria-label="FPS">
     <button data-fps="0" aria-pressed="true" data-ja="自動">Auto</button>
-    <button data-fps="60" aria-pressed="false">60 fps</button>
-    <button data-fps="30" aria-pressed="false">30 fps</button>
+    <button data-fps="120" aria-pressed="false">120</button>
+    <button data-fps="60" aria-pressed="false">60</button>
+    <button data-fps="30" aria-pressed="false">30</button>
   </div>
   <div class="row" style="margin-top:6px">
     <button id="pause" aria-pressed="false"></button>
@@ -692,7 +694,7 @@ function setFps(f) {
   for (const x of $('fps').children) x.setAttribute('aria-pressed', +x.dataset.fps === f);
 }
 let savedFps; try { savedFps = +localStorage.getItem('fps'); } catch {}
-setFps([60, 30].includes(savedFps) ? savedFps : 0);
+setFps([120, 60, 30].includes(savedFps) ? savedFps : 0);
 // language: English by default; [data-ja] elements hold their Japanese text, the English is stashed on first switch
 $('lang').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setLang(b.dataset.lang); });
 function setLang(l) {
@@ -760,7 +762,9 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => (BG 
 let last = performance.now(), frame = 0;
 function draw(now) {
   if (fps && now - last < 1000 / fps - 2) { requestAnimationFrame(draw); return; } // -2ms: rAF jitter
-  const dt = Math.min((now - last) / 1000, 1 / 30); // slow devices go slow-mo rather than piling up substeps
+  // a 1/60 s step costs ~20 ms of sim, so letting dt grow feeds back (slower frame -> bigger dt -> slower frame);
+  // cap it instead: slow devices go slow-mo. Only a 30 fps cap gets 1/30 so it isn't half speed.
+  const dt = Math.min((now - last) / 1000, 1 / Math.min(fps || 60, 60));
   last = now;
   if (sim && !paused) sim.step(dt * speed);
   if (!sim) { requestAnimationFrame(draw); return; }
