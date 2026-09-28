@@ -315,7 +315,7 @@ gl.bindVertexArray(null);
 const tex = gl.createTexture();
 
 // ---------- skin ----------
-let skinCanvas = null, fleshColors = [], slim = false;
+let skinCanvas = null, skinPx = null, slim = false;
 const skinPreview = document.getElementById('skinPreview').getContext('2d');
 const errEl = document.getElementById('err');
 
@@ -341,13 +341,7 @@ function loadSkin(img) {
       out.data[b + 3] = 255;
     }
   }
-  // cut-surface colour for each part: its front face averaged, a little lighter
-  fleshColors = parts.map((p) => {
-    const r = faceRect(p, 4); let s = [0, 0, 0];
-    for (let y = 0; y < p.size[1]; y++) for (let x = 0; x < p.size[0]; x++) { const i = at(r.o[0] + x, r.o[1] + y); for (let k = 0; k < 3; k++) s[k] += out.data[i + k]; }
-    const n = p.size[0] * p.size[1];
-    return s.map((v) => Math.min(1, (v / n / 255) * 0.8 + 0.2));
-  });
+  skinPx = out.data;
   g.putImageData(out, 0, 0);
   skinCanvas = c;
   skinPreview.clearRect(0, 0, 64, 64); skinPreview.drawImage(img, 0, 0);
@@ -364,6 +358,20 @@ function loadSkinFromBlob(blob) {
   img.onload = () => { loadSkin(img); URL.revokeObjectURL(img.src); };
   img.onerror = () => { errEl.textContent = '画像を読み込めませんでした'; };
   img.src = URL.createObjectURL(blob);
+}
+
+// cut-surface colour of a cell: the skin pixel of the nearest outer face, so each block is one colour through
+function cellColor(c) {
+  const p = sim.parts[sim.cellPart[c]], P = [0, 1, 2].map((a) => sim.cellPos[c * 3 + a] + 0.5);
+  let best = 0, bd = Infinity;
+  for (let dir = 0; dir < 6; dir++) {
+    const a = dir >> 1, d = dir & 1 ? P[a] - p.min[a] : p.min[a] + p.size[a] - P[a];
+    if (d < bd) { bd = d; best = dir; }
+  }
+  const r = faceRect(p, best);
+  const along = ([ax, s]) => Math.floor(s > 0 ? P[ax] - p.min[ax] : p.min[ax] + p.size[ax] - P[ax]);
+  const i = ((r.o[1] + along(r.v)) * 64 + r.o[0] + along(r.u)) * 4;
+  return [skinPx[i] / 255, skinPx[i + 1] / 255, skinPx[i + 2] / 255];
 }
 
 // ---------- sim + mesh ----------
@@ -383,7 +391,7 @@ function rebuildMesh() {
   const stat = new Float32Array(nRenderVerts * 6), idx = new Uint32Array(nIdx);
   for (let f = 0; f < nQ; f++) {
     const dir = q[f * 7 + 4], cell = q[f * 7 + 5], skin = q[f * 7 + 6];
-    const part = sim.parts[sim.cellPart[cell]], pi = sim.cellPart[cell];
+    const part = sim.parts[sim.cellPart[cell]];
     const r = skin ? faceRect(part, dir) : null;
     for (let k = 0; k < 4; k++) {
       const v = q[f * 7 + k], rv = f * 4 + k;
@@ -394,7 +402,7 @@ function rebuildMesh() {
         stat[rv * 6] = (r.o[0] + along(r.u)) / 64;
         stat[rv * 6 + 1] = (r.o[1] + along(r.v)) / 64;
       } else {
-        stat.set([0, 0, ...fleshColors[pi], 1], rv * 6);
+        stat.set([0, 0, ...cellColor(cell), 1], rv * 6);
       }
     }
     idx.set([f * 4, f * 4 + 1, f * 4 + 2, f * 4, f * 4 + 2, f * 4 + 3], f * 6);
